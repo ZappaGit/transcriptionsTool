@@ -17,7 +17,7 @@ uv run python transcribir.py URL                     # run directly
 uv run python transcribir.py C:\ruta\audio.mp3       # local file, no download
 ```
 
-Quick smoke test: `uv run python transcribir.py "https://www.youtube.com/watch?v=jNQXAC9IVRw" --salida $env:TEMP\humo` (19 s video, default `small` model; output must be identical to `transcripciones/Me at the zoo - jNQXAC9IVRw.txt`). Don't compare with `tiny`: its low-confidence windows trigger Whisper's temperature fallback (random sampling), so its output changes between runs.
+Quick smoke test: `uv run python transcribir.py "https://www.youtube.com/watch?v=jNQXAC9IVRw" --salida $env:TEMP\humo` (19 s video, default `small` model; output must be identical to `transcripciones/Me at the zoo - jNQXAC9IVRw.txt`). Don't compare with `tiny`: its low-confidence windows trigger Whisper's temperature fallback (random sampling), so its output changes between runs. `small` can also rarely differ by a word for the same reason; rerun before treating a one-word diff as a regression.
 
 External requirement: **ffmpeg** must be on PATH or installed via `winget install Gyan.FFmpeg`. `buscar_ffmpeg()` also looks in the WinGet Links/Packages folders under `%LOCALAPPDATA%`, because winget installs often aren't on PATH in the current shell.
 

@@ -106,12 +106,22 @@ def normalizar_entrada(texto: str, args) -> str:
 
 
 def opciones_ytdlp(carpeta: Path, args) -> dict:
+    from yt_dlp.postprocessor.metadataparser import MetadataParserPP
+
     opciones = {
         "outtmpl": str(carpeta / "%(title).80B - %(id)s.%(ext)s"),
         "windowsfilenames": True,
         "noplaylist": True,
         "retries": 10,
         "fragment_retries": 10,
+        # Algunos sitios (p. ej. Bunny) usan el nombre del archivo subido como título:
+        # "Clase 3.mp4" -> "Clase 3", para que no acabe en "Clase 3.mp4 - id.txt".
+        "postprocessors": [{
+            "key": "MetadataParser",
+            "when": "pre_process",
+            "actions": [(MetadataParserPP.Actions.REPLACE, "title",
+                         r"(?i)\.(mp4|m4v|mkv|webm|mov|avi|mp3|m4a|wav)$", "")],
+        }],
     }
     if args.referer:
         origen = "/".join(args.referer.split("/")[:3])
@@ -205,13 +215,16 @@ def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
     if not ffmpeg:
         sys.exit("No encuentro ffmpeg. Instálalo con: winget install Gyan.FFmpeg")
 
-    opciones = opciones_ytdlp(carpeta, args) | {
+    opciones = opciones_ytdlp(carpeta, args)
+    opciones["postprocessors"] += [
+        {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "64"},
+    ]
+    opciones |= {
         # Si no hay pista de solo audio (HLS con vídeo+audio juntos), la variante de
         # menor resolución trae el mismo audio y pesa mucho menos que la de 1080p.
         "format": "bestaudio/worst",
         "ffmpeg_location": ffmpeg,
         "concurrent_fragment_downloads": 4,
-        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "64"}],
         "postprocessor_args": {"extractaudio": ["-ac", "1", "-ar", "16000"]},
     }
 
