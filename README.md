@@ -72,3 +72,10 @@ En un portátil con CPU y el modelo `small`, un vídeo de 3 minutos tarda alrede
 - El texto se va guardando párrafo a párrafo. Si se corta (fallo o Ctrl+C), lo transcrito hasta ese momento queda en el `.txt` y el audio descargado se conserva; la herramienta muestra el comando para repetir la transcripción sin volver a descargar (empieza de nuevo desde el principio del audio).
 - Si el vídeo no tiene una pista de solo audio, se descarga la versión de menor resolución: el audio es el mismo y pesa mucho menos.
 - Deja el portátil enchufado y que no entre en suspensión.
+
+## Consumo de CPU y memoria
+
+- **RAM:** con el modelo `small`, unos 0,75 GB, más unos 230 MB por cada hora de audio. No crece durante la transcripción.
+- **CPU:** usa 4 hilos por defecto y se ejecuta con prioridad baja, así que el ordenador sigue respondiendo con normalidad. Que la CPU vaya al 100 % un buen rato no la daña: si se calienta, ella misma baja la velocidad.
+- Para ir aún más suave: `--hilos 2` (más lento). En un sobremesa con muchos núcleos, `--hilos 8` puede acelerar.
+- `--modelo medium` usa unas 2-3 veces más RAM y tiempo que `small`.

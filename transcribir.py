@@ -285,7 +285,7 @@ def transcribir(audio: Path, args):
         args.modelo,
         device="cpu",
         compute_type="int8",
-        cpu_threads=min(8, os.cpu_count() or 4),
+        cpu_threads=args.hilos,
     )
     segmentos, info = modelo.transcribe(
         str(audio),
@@ -299,6 +299,20 @@ def transcribir(audio: Path, args):
     )
     print(f"Idioma: {info.language} | Duración: {info.duration / 60:.1f} min. Transcribiendo...", flush=True)
     return en_parrafos(segmentos, info.duration)
+
+
+def bajar_prioridad():
+    """Prioridad 'por debajo de lo normal': el PC sigue respondiendo mientras transcribe.
+
+    No ralentiza la transcripción si no hay otra cosa pidiendo CPU. Los procesos hijos
+    (ffmpeg) heredan la prioridad.
+    """
+    if sys.platform == "win32":
+        import ctypes
+        BELOW_NORMAL_PRIORITY_CLASS = 0x4000
+        k32 = ctypes.windll.kernel32
+        k32.GetCurrentProcess.restype = ctypes.c_void_p
+        k32.SetPriorityClass(ctypes.c_void_p(k32.GetCurrentProcess()), BELOW_NORMAL_PRIORITY_CLASS)
 
 
 def main():
@@ -320,6 +334,11 @@ def main():
     p.add_argument("--conservar-audio", action="store_true", help="No borrar el audio descargado")
     p.add_argument("--vocabulario",
                    help='Nombres o términos que Whisper debe reconocer, p. ej. "Claude, Claude Code, Anthropic"')
+    p.add_argument("--hilos", type=int, default=min(4, os.cpu_count() or 4),
+                   help="Hilos de CPU para Whisper (por defecto 4). En portátiles más hilos apenas "
+                        "acelera y calienta más")
+    p.add_argument("--prioridad-normal", action="store_true",
+                   help="No bajar la prioridad del proceso (por defecto baja, para que el PC siga fluido)")
     p.add_argument("--subtitulos", action="store_true",
                    help="Si el vídeo tiene subtítulos hechos por personas, usarlos en vez de transcribir")
     args = p.parse_args()
@@ -329,6 +348,9 @@ def main():
     # fallan con CERTIFICATE_VERIFY_FAILED porque Windows solo instala esas raíces bajo demanda.
     import truststore
     truststore.inject_into_ssl()
+
+    if not args.prioridad_normal:
+        bajar_prioridad()
 
     if not args.url:
         args.url = leer_portapapeles()
