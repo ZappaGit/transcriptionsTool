@@ -5,14 +5,22 @@ Uso:
     transcribir URL --modelo medium --idioma es
     transcribir URL --referer https://sitio.com/pagina --cookies-navegador chrome
     transcribir C:\\ruta\\audio.mp3          (también acepta archivos locales)
+    transcribir URL --vocabulario "Claude, Claude Code, Anthropic"
+    transcribir URL --subtitulos            (usa los subtítulos humanos si los hay)
+    transcribir                             (lee la URL o un "Copiar como cURL" del portapapeles)
 """
 
 import argparse
+import html
 import os
+import re
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
 RAIZ = Path(__file__).resolve().parent
 
@@ -34,25 +42,67 @@ def buscar_ffmpeg() -> str | None:
     return None
 
 
-def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
-    """Baja solo el audio y lo deja en mono 16 kHz (lo que usa Whisper)."""
-    import yt_dlp
+HOSTS_YOUTUBE = ("youtube.com", "youtube-nocookie.com", "youtu.be")
 
-    ffmpeg = buscar_ffmpeg()
-    if not ffmpeg:
-        sys.exit("No encuentro ffmpeg. Instálalo con: winget install Gyan.FFmpeg")
 
+def leer_portapapeles() -> str:
+    r = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    return r.stdout.strip()
+
+
+def normalizar_entrada(texto: str, args) -> str:
+    """Acepta URL normal, embed, o un 'Copiar como cURL' de las DevTools.
+
+    De un cURL saca la URL (y el Referer si no se dio --referer). Las URLs de
+    YouTube (embed, nocookie, pings de estadísticas con docid=) se convierten
+    en la URL normal del vídeo.
+    """
+    original = texto.strip()
+    url = original
+    es_curl = url.lower().startswith("curl")
+    if es_curl:
+        limpio = url.replace("^", "")  # escapes de cmd ("Copiar como cURL (cmd)")
+        m = re.search(r"https?://[^\s'\"]+", limpio)
+        if not m:
+            sys.exit("No encuentro ninguna URL dentro del cURL pegado.")
+        url = m.group(0)
+        ref = re.search(r"""-H\s+['"]referer:\s*([^'"]+)['"]""", limpio, re.IGNORECASE)
+        if ref and not args.referer:
+            args.referer = ref.group(1).strip()
+
+    partes = urlparse(url)
+    host = partes.hostname or ""
+    if any(host == h or host.endswith("." + h) for h in HOSTS_YOUTUBE):
+        args.referer = None  # no hace falta para YouTube y a veces estorba
+        q = parse_qs(partes.query)
+        video_id = (q.get("docid") or q.get("video_id") or q.get("v") or [None])[0]
+        m = re.match(r"/(?:embed|shorts|live|v)/([\w-]{11})", partes.path)
+        if not video_id and m:
+            video_id = m.group(1)
+        if not video_id and host == "youtu.be":
+            video_id = partes.path.strip("/")[:11] or None
+        if video_id:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        elif "/api/" in partes.path:
+            sys.exit("Esa petición de YouTube no lleva el id del vídeo. Copia la URL de la página del vídeo.")
+    elif "googlevideo.com" in host:
+        print("Aviso: las URLs de googlevideo.com caducan enseguida; mejor usa la URL del vídeo.", file=sys.stderr)
+
+    if url != original:
+        print(f"URL detectada: {url}" + (f"  (referer: {args.referer})" if args.referer else ""), flush=True)
+    return url
+
+
+def opciones_ytdlp(carpeta: Path, args) -> dict:
     opciones = {
-        "format": "bestaudio/best",
         "outtmpl": str(carpeta / "%(title).80B - %(id)s.%(ext)s"),
         "windowsfilenames": True,
         "noplaylist": True,
-        "ffmpeg_location": ffmpeg,
         "retries": 10,
         "fragment_retries": 10,
-        "concurrent_fragment_downloads": 4,
-        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "64"}],
-        "postprocessor_args": {"extractaudio": ["-ac", "1", "-ar", "16000"]},
     }
     if args.referer:
         origen = "/".join(args.referer.split("/")[:3])
@@ -61,6 +111,98 @@ def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
         opciones["cookiesfrombrowser"] = (args.cookies_navegador,)
     if args.cookies:
         opciones["cookiefile"] = args.cookies
+    return opciones
+
+
+def elegir_idioma(disponibles: list[str], preferido: str | None) -> str | None:
+    """'es' coincide con 'es', 'es-ES', 'es-419'..."""
+    if not preferido:
+        return None
+    preferido = preferido.lower()
+    for clave in disponibles:
+        if clave.lower() == preferido:
+            return clave
+    for clave in disponibles:
+        if clave.lower().split("-")[0] == preferido.split("-")[0]:
+            return clave
+    return None
+
+
+def a_segundos(marca: str) -> float:
+    partes = marca.replace(",", ".").split(":")
+    return sum(float(p) * 60 ** i for i, p in enumerate(reversed(partes)))
+
+
+def leer_subtitulos(ruta: Path) -> list:
+    """Parsea .vtt / .srt en segmentos (start, end, text), quitando duplicados."""
+    bloques = re.split(r"\n\s*\n", ruta.read_text(encoding="utf-8", errors="replace").replace("\r", ""))
+    segmentos, anterior = [], None
+    for bloque in bloques:
+        lineas = bloque.strip().split("\n")
+        for i, linea in enumerate(lineas):
+            m = re.match(r"([\d:.,]+)\s*-->\s*([\d:.,]+)", linea)
+            if m:
+                texto = " ".join(lineas[i + 1:])
+                texto = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", texto))).strip()
+                if texto and texto != anterior:
+                    segmentos.append(SimpleNamespace(start=a_segundos(m.group(1)), end=a_segundos(m.group(2)), text=texto))
+                    anterior = texto
+                break
+    return segmentos
+
+
+def descargar_subtitulos(url: str, carpeta: Path, args) -> tuple[str, str] | None:
+    """Si el vídeo tiene subtítulos hechos por personas, los devuelve como texto."""
+    import yt_dlp
+
+    opciones = opciones_ytdlp(carpeta, args) | {"skip_download": True, "quiet": True, "no_warnings": True}
+    try:
+        with yt_dlp.YoutubeDL(opciones) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except yt_dlp.utils.DownloadError:
+        return None  # ya fallará (con su mensaje) al bajar el audio
+
+    disponibles = [k for k in (info.get("subtitles") or {}) if k != "live_chat"]
+    if not disponibles:
+        print("No hay subtítulos hechos por personas; se transcribe con Whisper.", flush=True)
+        return None
+    idioma = elegir_idioma(disponibles, args.idioma) or elegir_idioma(disponibles, info.get("language"))
+    if not idioma and len(disponibles) == 1:
+        idioma = disponibles[0]
+    if not idioma:
+        print(f"Hay subtítulos en: {', '.join(disponibles)}. Elige uno con --idioma. "
+              "Se transcribe con Whisper.", flush=True)
+        return None
+
+    opciones |= {"writesubtitles": True, "subtitleslangs": [idioma], "subtitlesformat": "vtt/srt/best"}
+    with yt_dlp.YoutubeDL(opciones) as ydl:
+        info = ydl.process_ie_result(info, download=True)
+    ruta = Path(info["requested_subtitles"][idioma]["filepath"])
+    segmentos = leer_subtitulos(ruta)
+    ruta.unlink(missing_ok=True)
+    if not segmentos:
+        print("Los subtítulos están vacíos o en un formato que no entiendo; se transcribe con Whisper.", flush=True)
+        return None
+    print(f"Usando subtítulos '{idioma}' del vídeo (sin Whisper).", flush=True)
+    nombre = Path(ydl.prepare_filename(info)).stem
+    return en_parrafos(segmentos, 0), nombre
+
+
+def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
+    """Baja solo el audio y lo deja en mono 16 kHz (lo que usa Whisper)."""
+    import yt_dlp
+
+    ffmpeg = buscar_ffmpeg()
+    if not ffmpeg:
+        sys.exit("No encuentro ffmpeg. Instálalo con: winget install Gyan.FFmpeg")
+
+    opciones = opciones_ytdlp(carpeta, args) | {
+        "format": "bestaudio/best",
+        "ffmpeg_location": ffmpeg,
+        "concurrent_fragment_downloads": 4,
+        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "64"}],
+        "postprocessor_args": {"extractaudio": ["-ac", "1", "-ar", "16000"]},
+    }
 
     try:
         with yt_dlp.YoutubeDL(opciones) as ydl:
@@ -121,6 +263,9 @@ def transcribir(audio: Path, args) -> str:
         beam_size=5,
         vad_filter=True,  # salta silencios y música: más rápido y sin texto inventado
         condition_on_previous_text=False,  # evita bucles de frases repetidas
+        # hotwords se aplica a cada ventana de 30 s; initial_prompt solo a la primera
+        # porque condition_on_previous_text=False reinicia el contexto.
+        hotwords=args.vocabulario,
     )
     print(f"Idioma: {info.language} | Duración: {info.duration / 60:.1f} min. Transcribiendo...", flush=True)
     return en_parrafos(segmentos, info.duration)
@@ -131,7 +276,9 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     p = argparse.ArgumentParser(description="URL de vídeo/audio -> transcripción .txt")
-    p.add_argument("url", help="URL (YouTube, .m3u8, etc.) o ruta a un archivo local")
+    p.add_argument("url", nargs="?",
+                   help="URL (YouTube, .m3u8, embed, 'Copiar como cURL'...) o ruta a un archivo local. "
+                        "Si se omite, se lee del portapapeles")
     p.add_argument("--modelo", default="small",
                    help="tiny, base, small (por defecto), medium, large-v3-turbo. Más grande = más preciso y más lento")
     p.add_argument("--idioma", default=None, help="Código de idioma (es, en...). Por defecto se detecta solo")
@@ -140,7 +287,17 @@ def main():
     p.add_argument("--cookies-navegador", help="Usar cookies de: chrome, edge, firefox...")
     p.add_argument("--cookies", help="Archivo cookies.txt (formato Netscape)")
     p.add_argument("--conservar-audio", action="store_true", help="No borrar el audio descargado")
+    p.add_argument("--vocabulario",
+                   help='Nombres o términos que Whisper debe reconocer, p. ej. "Claude, Claude Code, Anthropic"')
+    p.add_argument("--subtitulos", action="store_true",
+                   help="Si el vídeo tiene subtítulos hechos por personas, usarlos en vez de transcribir")
     args = p.parse_args()
+
+    if not args.url:
+        args.url = leer_portapapeles()
+        if not args.url:
+            p.error("falta la URL (y el portapapeles está vacío)")
+        print(f"Leído del portapapeles: {args.url[:100]}{'...' if len(args.url) > 100 else ''}", flush=True)
 
     salida = Path(args.salida)
     salida.mkdir(parents=True, exist_ok=True)
@@ -148,17 +305,25 @@ def main():
 
     local = Path(args.url)
     es_local = "://" not in args.url and local.exists()
+    texto, audio = None, None
     if es_local:
         audio, nombre = local, local.stem
     else:
-        audio, nombre = descargar_audio(args.url, salida, args)
-        print(f"Audio: {audio.name}", flush=True)
+        args.url = normalizar_entrada(args.url, args)
+        if args.subtitulos:
+            resultado = descargar_subtitulos(args.url, salida, args)
+            if resultado:
+                texto, nombre = resultado
+        if texto is None:
+            audio, nombre = descargar_audio(args.url, salida, args)
+            print(f"Audio: {audio.name}", flush=True)
 
-    texto = transcribir(audio, args)
+    if texto is None:
+        texto = transcribir(audio, args)
     destino = salida / f"{nombre}.txt"
     destino.write_text(texto, encoding="utf-8")
 
-    if not es_local and not args.conservar_audio:
+    if audio is not None and not es_local and not args.conservar_audio:
         audio.unlink(missing_ok=True)
 
     print(f"\nListo en {(time.time() - inicio) / 60:.1f} min -> {destino}")

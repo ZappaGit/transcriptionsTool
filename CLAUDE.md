@@ -23,7 +23,11 @@ External requirement: **ffmpeg** must be on PATH or installed via `winget instal
 
 ## Pipeline
 
-`main()` → `descargar_audio()` (skipped for local files) → `transcribir()` → `en_parrafos()` → write `.txt` → delete the downloaded audio (unless `--conservar-audio`).
+`main()` → `normalizar_entrada()` → [`descargar_subtitulos()` if `--subtitulos`] → `descargar_audio()` (skipped for local files or when subtitles were used) → `transcribir()` → `en_parrafos()` → write `.txt` → delete the downloaded audio (unless `--conservar-audio`).
+
+- **Input**: with no `url` arg, the clipboard is read (PowerShell `Get-Clipboard`). `normalizar_entrada` accepts a DevTools "Copy as cURL" (cmd `^` escapes stripped; URL and `-H referer` extracted) and rewrites any YouTube variant (embed, nocookie, shorts, youtu.be, stats pings with `docid=`) to `watch?v=ID`, dropping the referer for YouTube.
+- **Subtitles** (`--subtitulos`): only human-made subtitles (`info["subtitles"]`, never `automatic_captions`; Whisper beats YouTube auto-captions). Language = `--idioma`, else the video's language, else the only one available; otherwise it falls back to Whisper. `leer_subtitulos` parses vtt/srt into segment-like objects so they go through the same `en_parrafos`.
+- **Vocabulary** (`--vocabulario`): passed as faster-whisper `hotwords`, not `initial_prompt` — with `condition_on_previous_text=False` the prompt only affects the first 30 s window, hotwords apply to every window.
 
 - **Download**: yt-dlp extracts best audio and converts it with ffmpeg to mono 16 kHz 64k mp3 (the format Whisper uses). Output name template is `%(title).80B - %(id)s`, which also becomes the `.txt` name. Auth options for protected streams: `--referer` (also sets `Origin`), `--cookies-navegador`, `--cookies`. 401/403 errors print a Spanish troubleshooting hint and exit.
 - **Transcription**: `WhisperModel(device="cpu", compute_type="int8")`, default model `small`. `vad_filter=True` and `condition_on_previous_text=False` are deliberate: they skip silence/music and prevent hallucinated repetition loops. Don't remove them.
