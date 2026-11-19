@@ -17,7 +17,7 @@ uv run python transcribir.py URL                     # run directly
 uv run python transcribir.py C:\ruta\audio.mp3       # local file, no download
 ```
 
-Quick smoke test: `uv run python transcribir.py "https://www.youtube.com/watch?v=jNQXAC9IVRw" --modelo tiny` (19 s video; expected output already in `transcripciones/`).
+Quick smoke test: `uv run python transcribir.py "https://www.youtube.com/watch?v=jNQXAC9IVRw" --salida $env:TEMP\humo` (19 s video, default `small` model; output must be identical to `transcripciones/Me at the zoo - jNQXAC9IVRw.txt`). Don't compare with `tiny`: its low-confidence windows trigger Whisper's temperature fallback (random sampling), so its output changes between runs.
 
 External requirement: **ffmpeg** must be on PATH or installed via `winget install Gyan.FFmpeg`. `buscar_ffmpeg()` also looks in the WinGet Links/Packages folders under `%LOCALAPPDATA%`, because winget installs often aren't on PATH in the current shell.
 
@@ -31,7 +31,9 @@ External requirement: **ffmpeg** must be on PATH or installed via `winget instal
 
 - **Download**: yt-dlp extracts best audio and converts it with ffmpeg to mono 16 kHz 64k mp3 (the format Whisper uses). Output name template is `%(title).80B - %(id)s`, which also becomes the `.txt` name. Auth options for protected streams: `--referer` (also sets `Origin`), `--cookies-navegador`, `--cookies`. 401/403 errors print a Spanish troubleshooting hint and exit.
 - **Transcription**: `WhisperModel(device="cpu", compute_type="int8")`, default model `small`. `vad_filter=True` and `condition_on_previous_text=False` are deliberate: they skip silence/music and prevent hallucinated repetition loops. Don't remove them.
-- **Paragraphing**: `en_parrafos` consumes the lazy segment generator (this is where the actual transcription runs) and starts a new paragraph after a pause > 2 s or after ~600 chars ending in sentence punctuation. It prints progress every 5 s.
+- **Paragraphing**: `en_parrafos` is a generator over the lazy segment generator (this is where the actual transcription runs); it starts a new paragraph after a pause > 2 s or after ~600 chars ending in sentence punctuation, and prints progress, speed and ETA every 5 s. `main()` writes and flushes each paragraph as it is yielded, so a crash/Ctrl+C on a multi-hour file keeps the partial `.txt` and the downloaded audio (it prints the command to resume from the local audio).
+- **Format selection**: `bestaudio/worst` — for HLS streams with muxed video+audio (e.g. Bunny/mediadelivery) the lowest-resolution variant carries the same audio at a fraction of the size. Don't change it to `best`.
+- **Bunny Stream** (`iframe.mediadelivery.net/embed/LIB/ID`, `*.b-cdn.net/.../playlist.m3u8`) is supported by yt-dlp's `bunnycdn` extractor, usually needing the course page as Referer. `normalizar_entrada` rejects copied player telemetry requests (`.metrics/track-session`) with instructions on which request to copy.
 - `yt_dlp` and `faster_whisper` are imported lazily inside functions so `--help` stays fast.
 - Local-file detection: the arg has no `://` and the path exists.
 - Paths: `--salida` defaults to `transcripciones/` next to the script (`RAIZ`), not the cwd. The downloaded audio is written into that same folder and deleted afterwards. Whisper models are cached by Hugging Face Hub (first run per model downloads it).

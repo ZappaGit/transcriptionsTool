@@ -75,6 +75,15 @@ def normalizar_entrada(texto: str, args) -> str:
 
     partes = urlparse(url)
     host = partes.hostname or ""
+    if "mediadelivery.net" in host or "b-cdn.net" in host or "bunnycdn" in host:
+        es_video = re.search(r"/(embed|play)/\d+/[\da-f-]+|\.m3u8", partes.path)
+        if not es_video:
+            sys.exit(
+                "Esa petición no es el vídeo (es de estadísticas del reproductor Bunny/mediadelivery).\n"
+                "En la pestaña Red de las DevTools filtra por 'embed' y copia como cURL la petición a\n"
+                "  iframe.mediadelivery.net/embed/NUMERO/ID   (o la que acaba en playlist.m3u8)\n"
+                "y vuelve a ejecutar transcribir."
+            )
     if any(host == h or host.endswith("." + h) for h in HOSTS_YOUTUBE):
         args.referer = None  # no hace falta para YouTube y a veces estorba
         q = parse_qs(partes.query)
@@ -185,7 +194,7 @@ def descargar_subtitulos(url: str, carpeta: Path, args) -> tuple[str, str] | Non
         return None
     print(f"Usando subtítulos '{idioma}' del vídeo (sin Whisper).", flush=True)
     nombre = Path(ydl.prepare_filename(info)).stem
-    return en_parrafos(segmentos, 0), nombre
+    return list(en_parrafos(segmentos, 0)), nombre
 
 
 def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
@@ -197,7 +206,9 @@ def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
         sys.exit("No encuentro ffmpeg. Instálalo con: winget install Gyan.FFmpeg")
 
     opciones = opciones_ytdlp(carpeta, args) | {
-        "format": "bestaudio/best",
+        # Si no hay pista de solo audio (HLS con vídeo+audio juntos), la variante de
+        # menor resolución trae el mismo audio y pesa mucho menos que la de 1080p.
+        "format": "bestaudio/worst",
         "ffmpeg_location": ffmpeg,
         "concurrent_fragment_downloads": 4,
         "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "64"}],
@@ -224,10 +235,14 @@ def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
     return audio, audio.stem
 
 
-def en_parrafos(segmentos, duracion: float) -> str:
-    """Une los segmentos en párrafos: corta en pausas largas o al acumular texto."""
-    parrafos, actual, fin_anterior = [], [], 0.0
-    ultimo_aviso = time.time()
+def en_parrafos(segmentos, duracion: float):
+    """Genera párrafos: corta en pausas largas o al acumular texto.
+
+    Es un generador para poder escribir cada párrafo en cuanto se cierra: en una
+    transcripción de horas, un fallo o Ctrl+C no se lleva por delante lo ya hecho.
+    """
+    actual, fin_anterior = [], 0.0
+    inicio = ultimo_aviso = time.time()
     for seg in segmentos:
         texto = seg.text.strip()
         if not texto:
@@ -235,19 +250,21 @@ def en_parrafos(segmentos, duracion: float) -> str:
         largo = sum(len(t) + 1 for t in actual)
         pausa = seg.start - fin_anterior
         if actual and (pausa > 2.0 or (largo > 600 and actual[-1][-1:] in ".?!…")):
-            parrafos.append(" ".join(actual))
+            yield " ".join(actual)
             actual = []
         actual.append(texto)
         fin_anterior = seg.end
         if duracion and time.time() - ultimo_aviso > 5:
-            print(f"  {seg.end / duracion:5.1%}  ({seg.end / 60:.1f} de {duracion / 60:.1f} min)", flush=True)
             ultimo_aviso = time.time()
+            velocidad = seg.end / max(ultimo_aviso - inicio, 1e-6)  # segundos de audio por segundo real
+            quedan = (duracion - seg.end) / velocidad / 60 if velocidad else 0
+            print(f"  {seg.end / duracion:5.1%}  ({seg.end / 60:.1f} de {duracion / 60:.1f} min)"
+                  f"  x{velocidad:.1f}  quedan ~{quedan:.0f} min", flush=True)
     if actual:
-        parrafos.append(" ".join(actual))
-    return "\n\n".join(parrafos) + "\n"
+        yield " ".join(actual)
 
 
-def transcribir(audio: Path, args) -> str:
+def transcribir(audio: Path, args):
     from faster_whisper import WhisperModel
 
     print(f"Cargando modelo '{args.modelo}' (la primera vez se descarga)...", flush=True)
@@ -272,8 +289,9 @@ def transcribir(audio: Path, args) -> str:
 
 
 def main():
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    for flujo in (sys.stdout, sys.stderr):
+        if hasattr(flujo, "reconfigure"):
+            flujo.reconfigure(encoding="utf-8", errors="replace")
 
     p = argparse.ArgumentParser(description="URL de vídeo/audio -> transcripción .txt")
     p.add_argument("url", nargs="?",
@@ -321,7 +339,18 @@ def main():
     if texto is None:
         texto = transcribir(audio, args)
     destino = salida / f"{nombre}.txt"
-    destino.write_text(texto, encoding="utf-8")
+    try:
+        with destino.open("w", encoding="utf-8") as f:
+            for i, parrafo in enumerate(texto):
+                f.write(("\n\n" if i else "") + parrafo)
+                f.flush()
+            f.write("\n")
+    except (KeyboardInterrupt, Exception) as e:
+        motivo = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        print(f"\nInterrumpido ({motivo}). Lo transcrito hasta ahora está en: {destino}", file=sys.stderr)
+        if audio is not None and not es_local:
+            print(f"El audio se conserva; para no volver a descargarlo: transcribir \"{audio}\"", file=sys.stderr)
+        sys.exit(1)
 
     if audio is not None and not es_local and not args.conservar_audio:
         audio.unlink(missing_ok=True)

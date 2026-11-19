@@ -59,8 +59,16 @@ Cuando el vídeo está dentro de otra página (un curso, una web con reproductor
 
 La herramienta lee el portapapeles, saca la URL y el Referer del cURL y, si es un vídeo de YouTube incrustado, lo convierte en la URL normal del vídeo. Para streams `.m3u8` busca la petición que acaba en `.m3u8`; si lleva un token que caduca, lánzalo enseguida.
 
+Ojo: no vale cualquier petición. Las de estadísticas del reproductor (`ptracking`, `stats`, `.metrics/track-session`...) no siempre llevan el vídeo. En YouTube suelen incluir el id y funcionan; en reproductores Bunny (`mediadelivery.net`) no, y la herramienta te dirá que copies la petición a `iframe.mediadelivery.net/embed/NUMERO/ID` (filtra por `embed` en la pestaña Red) o la que acaba en `playlist.m3u8`.
+
 Si el servidor devuelve 401/403, prueba por este orden: `--referer`, `--cookies-navegador` (con el navegador cerrado) y `--cookies`.
 
 ## Rendimiento orientativo
 
-En un portátil con CPU y el modelo `small`, un vídeo de 3 minutos tarda alrededor de 1 minuto en total.
+En un portátil con CPU y el modelo `small`, un vídeo de 3 minutos tarda alrededor de 1 minuto en total. Durante la transcripción se muestra la velocidad (`x3.0` = 3 minutos de audio por minuto real) y el tiempo restante estimado.
+
+## Transcripciones largas (horas)
+
+- El texto se va guardando párrafo a párrafo. Si se corta (fallo o Ctrl+C), lo transcrito hasta ese momento queda en el `.txt` y el audio descargado se conserva; la herramienta muestra el comando para repetir la transcripción sin volver a descargar (empieza de nuevo desde el principio del audio).
+- Si el vídeo no tiene una pista de solo audio, se descarga la versión de menor resolución: el audio es el mismo y pesa mucho menos.
+- Deja el portátil enchufado y que no entre en suspensión.
