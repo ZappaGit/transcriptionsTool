@@ -5,3 +5,6 @@ cookies*.txt
 # transcripciones y audio temporal: solo se versiona la salida de referencia del smoke test
 transcripciones/*
 !transcripciones/Me at the zoo - jNQXAC9IVRw.txt
+
+# capturas del navegador: llevan cookies y tokens de sesión
+*.har

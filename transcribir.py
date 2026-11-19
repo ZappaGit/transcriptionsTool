@@ -311,6 +311,12 @@ def main():
                    help="Si el vídeo tiene subtítulos hechos por personas, usarlos en vez de transcribir")
     args = p.parse_args()
 
+    # Verificar HTTPS con el almacén de certificados de Windows (como el navegador).
+    # Sin esto, CDNs con raíces recientes (p. ej. *.b-cdn.net de Bunny, SSL.com Root 2022)
+    # fallan con CERTIFICATE_VERIFY_FAILED porque Windows solo instala esas raíces bajo demanda.
+    import truststore
+    truststore.inject_into_ssl()
+
     if not args.url:
         args.url = leer_portapapeles()
         if not args.url:
