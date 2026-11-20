@@ -1,10 +1,10 @@
-# Cómo contribuir
+# Contributing
 
-Gracias por tu interés. Antes de empezar, lee el [código de conducta](CODE_OF_CONDUCT.md) y la [política de seguridad](SECURITY.md).
+Thanks for your interest. Before you start, please read the [Code of Conduct](CODE_OF_CONDUCT.md) and the [security policy](SECURITY.md).
 
-## Preparar el entorno
+## Setting up the environment
 
-Requisitos: Windows, [uv](https://docs.astral.sh/uv/) y ffmpeg (`winget install Gyan.FFmpeg`).
+Requirements: Windows, [uv](https://docs.astral.sh/uv/) and ffmpeg (`winget install Gyan.FFmpeg`).
 
 ```powershell
 git clone https://github.com/ZappaGit/transcriptionsTool.git
@@ -13,48 +13,48 @@ uv sync
 uv run python transcribir.py --help
 ```
 
-## Comprobaciones
+## Checks
 
-El proyecto no tiene tests unitarios. La comprobación de referencia es el smoke test: un vídeo corto de YouTube (19 s) cuya salida debe coincidir con la versión de referencia versionada en `transcripciones/`:
+The project has no unit tests. The reference check is the smoke test: a short 19-second YouTube video whose output must match the reference version stored in `transcripciones/`:
 
 ```powershell
 uv run python transcribir.py "https://www.youtube.com/watch?v=jNQXAC9IVRw" --salida $env:TEMP\humo
 ```
 
-Compara el `.txt` resultante con `transcripciones/Me at the zoo - jNQXAC9IVRw.txt`.
+Compare the resulting `.txt` with `transcripciones/Me at the zoo - jNQXAC9IVRw.txt`.
 
-Notas:
+Notes:
 
-- Usa el modelo por defecto (`small`). Con `tiny`, la salida cambia entre ejecuciones porque Whisper muestrea de nuevo en las ventanas de baja confianza.
-- Con `small` puede cambiar alguna palabra por el mismo motivo. Repite la prueba antes de dar por buena una diferencia de una palabra.
+- Use the default model (`small`). With `tiny`, the output changes between runs because Whisper samples again in low-confidence windows.
+- With `small`, a single word may occasionally change for the same reason. Run the test again before accepting a one-word difference.
 
-## Convenciones
+## Conventions
 
-- El código, los comentarios, las opciones de línea de comandos y los mensajes al usuario están en **español**. Mantenlo así.
-- Lee [CLAUDE.md](CLAUDE.md): describe la arquitectura y las decisiones que no conviene revertir. En particular:
-  - `vad_filter=True` y `condition_on_previous_text=False` son deliberados; no los quites.
-  - El formato `bestaudio/worst` no se cambia a `best`.
-  - Los subtítulos automáticos de YouTube no se usan (solo los hechos por personas).
-- Mantén las dependencias al mínimo. Si añades una, explica por qué en la descripción del PR y comprueba que su licencia sea compatible con GPLv3.
-- No añadas al repositorio audio, vídeo, transcripciones, cookies, tokens, modelos ni rutas personales. Están excluidos en `.gitignore`; si necesitas una salida de referencia nueva, discútelo en un issue antes.
+- The code, comments, command-line options and user-facing messages are in **Spanish**. Please keep them that way.
+- Read [CLAUDE.md](CLAUDE.md): it describes the architecture and the decisions that should not be reverted. In particular:
+  - `vad_filter=True` and `condition_on_previous_text=False` are deliberate; do not remove them.
+  - The `bestaudio/worst` format selection must not be changed to `best`.
+  - YouTube's automatic captions are not used (only human-made subtitles).
+- Keep dependencies to a minimum. If you add one, explain why in the pull request description and check that its license is compatible with GPLv3.
+- Do not add audio, video, transcripts, cookies, tokens, models or personal paths to the repository. They are excluded in `.gitignore`. If you need a new reference output, discuss it in an issue first.
 
-## Abrir un pull request
+## Opening a pull request
 
-1. Crea una rama desde `main` (no trabajes directamente sobre `main`).
-2. Haz cambios pequeños y con un propósito claro. Un PR por tema.
-3. Ejecuta el smoke test y el `--help`, y anótalo en la plantilla del PR.
-4. Abre el PR contra `main` y rellena la [plantilla](.github/pull_request_template.md).
-5. Un mantenedor revisará el PR. Los checks de CodeQL deben pasar antes de fusionar.
+1. Create a branch from `main` (do not work directly on `main`).
+2. Keep changes small and focused. One PR per topic.
+3. Run the smoke test and `--help`, and note the results in the PR template.
+4. Open the PR against `main` and fill in the [pull request template](.github/pull_request_template.md).
+5. A maintainer will review the PR. The CodeQL checks must pass before merging.
 
-## Licencia de las contribuciones
+## Licensing of contributions
 
-El proyecto se distribuye bajo [GPLv3](LICENSE). Al enviar una contribución aceptas que se publique bajo esa misma licencia. Mantén la cabecera SPDX en los ficheros nuevos:
+The project is distributed under the [GPLv3](LICENSE). By submitting a contribution you agree that it will be published under the same license. Keep the SPDX header in new files:
 
 ```python
 # SPDX-License-Identifier: GPL-3.0-or-later
 ```
 
-## Reportar problemas
+## Reporting problems
 
-- Errores y propuestas: abre un issue con la plantilla correspondiente.
-- Vulnerabilidades de seguridad: **no** las abras como issue. Sigue [SECURITY.md](SECURITY.md).
+- Bugs and feature requests: open an issue using the matching template.
+- Security vulnerabilities: do **not** open an issue. Follow [SECURITY.md](SECURITY.md).
