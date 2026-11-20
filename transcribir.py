@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) [YEAR] [HOLDER]
+# Copyright (C) 2026 Diego Izquierdo Fernandez
 """Descarga el audio de una URL (YouTube, .m3u8, etc.) y lo transcribe a .txt.
 
 Uso:
