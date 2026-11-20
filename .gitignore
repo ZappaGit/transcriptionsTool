@@ -1,10 +1,63 @@
+# Entornos virtuales y cachés de Python
 .venv/
+venv/
+env/
 __pycache__/
-*.pyc
-cookies*.txt
-# transcripciones y audio temporal: solo se versiona la salida de referencia del smoke test
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Secretos y configuración local (nunca se versionan)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*
+*secret*
+*token*.json
+cookies*
+*.cookies
+.claude/settings.local.json
+
+# Capturas del navegador: llevan cookies y tokens de sesión
+*.har
+
+# Editores e IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Transcripciones, audio y vídeo descargados: pueden ser contenido personal o con copyright.
+# Solo se versiona la salida de referencia del smoke test.
 transcripciones/*
 !transcripciones/Me at the zoo - jNQXAC9IVRw.txt
+*.mp3
+*.m4a
+*.opus
+*.ogg
+*.wav
+*.flac
+*.aac
+*.webm
+*.mp4
+*.mkv
+*.mov
 
-# capturas del navegador: llevan cookies y tokens de sesión
-*.har
+# Modelos y pesos (se descargan con faster-whisper, no se guardan en el repositorio)
+*.bin
+*.pt
+*.ckpt
+*.safetensors
+*.onnx

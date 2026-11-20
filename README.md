@@ -79,3 +79,20 @@ En un portátil con CPU y el modelo `small`, un vídeo de 3 minutos tarda alrede
 - **CPU:** usa 4 hilos por defecto y se ejecuta con prioridad baja, así que el ordenador sigue respondiendo con normalidad. Que la CPU vaya al 100 % un buen rato no la daña: si se calienta, ella misma baja la velocidad.
 - Para ir aún más suave: `--hilos 2` (más lento). En un sobremesa con muchos núcleos, `--hilos 8` puede acelerar.
 - `--modelo medium` usa unas 2-3 veces más RAM y tiempo que `small`.
+
+## Seguridad y privacidad
+
+- **Cookies y sesiones:** `--cookies`, `--cookies-navegador` y los `.har` o las peticiones copiadas con «Copiar como cURL» pueden contener sesiones iniciadas. No los subas a ningún sitio ni los pegues en issues. El repositorio ignora `cookies*`, `*.har` y `.env`, pero eso no sustituye a tener cuidado al manejarlos.
+- **Contenido descargado:** el audio, los vídeos y las transcripciones se guardan en `transcripciones/`, que está excluida del control de versiones salvo la salida de referencia del smoke test. Revisa antes de compartir una transcripción si tiene datos personales o contenido con copyright.
+- **Procesamiento local:** la transcripción se hace en tu equipo. Hugging Face solo sirve para descargar los modelos la primera vez.
+- **Vulnerabilidades:** repórtalas en privado según [SECURITY.md](SECURITY.md), nunca como issue público.
+
+## Contribuir
+
+Consulta [CONTRIBUTING.md](CONTRIBUTING.md) para preparar el entorno, ejecutar el smoke test y abrir un pull request. Todos debemos seguir el [código de conducta](CODE_OF_CONDUCT.md).
+
+## Licencia
+
+Distribuido bajo la [GNU General Public License v3.0](LICENSE) (GPLv3). Puedes usarlo, estudiarlo, modificarlo y redistribuirlo bajo esos términos. Las dependencias usan licencias compatibles (MIT, BSD, Apache-2.0, Unlicense); ffmpeg se instala aparte y no forma parte del repositorio.
+
+Copyright (C) [YEAR] [HOLDER]
