@@ -1,16 +1,34 @@
-# transcribir
+# 🎧 transcribir
 
-Herramienta de línea de comandos para Windows que descarga el audio de un vídeo (YouTube, streams `.m3u8` y [todo lo que soporta yt-dlp](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)) o toma un archivo de audio local, lo transcribe con [faster-whisper](https://github.com/SYSTRAN/faster-whisper) en la CPU y guarda el texto en párrafos en un `.txt`.
+**From a video or audio file to a paragraphed transcript, fully local and CPU-only.**
 
-Todo funciona en local: no se envía el audio a ningún servicio externo.
+transcribir downloads the audio of a video (YouTube, `.m3u8` streams, and [anything yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)) or takes a local audio file, transcribes it with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) on the CPU, and writes the text in paragraphs to a `.txt` file. Nothing is sent to an external service: the audio never leaves your machine.
 
-## Requisitos
+![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![license GPLv3](https://img.shields.io/badge/license-GPLv3-blue)
+![GPU not required](https://img.shields.io/badge/GPU-not%20required-orange)
 
-- [uv](https://docs.astral.sh/uv/) (instala Python ≥ 3.12 y las dependencias)
-- **ffmpeg**: `winget install Gyan.FFmpeg` (no hace falta que esté en el PATH; se busca también en la carpeta de winget)
-- Recomendado: **Deno** (`winget install DenoLand.Deno`), que yt-dlp necesita para extraer bien los vídeos de YouTube
+## Contents
 
-## Instalación
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Options](#options)
+- [Embedded videos on other websites](#embedded-videos-on-other-websites)
+- [Performance](#performance)
+- [Long transcriptions (hours)](#long-transcriptions-hours)
+- [CPU and memory use](#cpu-and-memory-use)
+- [Security and privacy](#security-and-privacy)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Requirements
+
+- [uv](https://docs.astral.sh/uv/) (installs Python ≥ 3.12 and the dependencies)
+- **ffmpeg**: `winget install Gyan.FFmpeg` (it does not need to be on the PATH; the winget folder is searched too)
+- Recommended: **Deno** (`winget install DenoLand.Deno`), which yt-dlp needs to extract YouTube videos properly
+
+## Installation
 
 ```powershell
 git clone https://github.com/ZappaGit/transcriptionsTool.git
@@ -18,81 +36,85 @@ cd transcriptionsTool
 uv sync
 ```
 
-La primera vez que se usa cada modelo de Whisper se descarga automáticamente (de decenas de MB para `tiny` a más de 1 GB para los grandes).
+The first time each Whisper model is used, it is downloaded automatically (from tens of MB for `tiny` to more than 1 GB for the large ones).
 
-## Uso
+## Usage
 
 ```powershell
-.\transcribir.cmd URL                                   # funciona desde cualquier carpeta
+.\transcribir.cmd URL                                   # works from any folder
 .\transcribir.cmd URL --modelo medium --idioma es
-.\transcribir.cmd C:\ruta\audio.mp3                     # archivo local, sin descarga
+.\transcribir.cmd C:\ruta\audio.mp3                     # local file, no download
 .\transcribir.cmd URL --vocabulario "Claude, Claude Code, Anthropic"
-.\transcribir.cmd URL --subtitulos                      # usa los subtítulos del vídeo si los hay
-.\transcribir.cmd                                       # sin URL: la lee del portapapeles
+.\transcribir.cmd URL --subtitulos                      # uses the video's subtitles if it has them
+.\transcribir.cmd                                       # no URL: reads it from the clipboard
 ```
 
-También se puede lanzar con `uv run python transcribir.py ...`.
+You can also run it with `uv run python transcribir.py ...`.
 
-El resultado se guarda en `transcripciones\<título> - <id>.txt`. El audio descargado se borra al terminar (salvo con `--conservar-audio`).
+The result is saved as `transcripciones\<title> - <id>.txt`. The downloaded audio is deleted when it finishes (unless you use `--conservar-audio`).
 
-### Opciones
+> Note: the command-line options and the program's messages are in Spanish (`--modelo`, `--idioma`, `--salida`...). Use them as shown here.
 
-| Opción | Descripción |
+## Options
+
+| Option | Description |
 |---|---|
-| `--modelo` | `tiny`, `base`, `small` (por defecto), `medium`, `large-v3-turbo`. Más grande = más preciso y más lento |
-| `--idioma` | Código de idioma (`es`, `en`...). Por defecto se detecta solo |
-| `--vocabulario` | Nombres propios o términos técnicos que Whisper suele escribir mal |
-| `--subtitulos` | Si el vídeo tiene subtítulos hechos por personas, se usan en vez de transcribir (instantáneo). Si no, transcribe con Whisper |
-| `--salida` | Carpeta de salida (por defecto `transcripciones` junto al script) |
-| `--referer` | Página donde se reproduce el vídeo (arregla muchos errores 403 en `.m3u8`) |
-| `--cookies-navegador` | Usar las cookies de `chrome`, `edge`, `firefox`... |
-| `--cookies` | Archivo `cookies.txt` en formato Netscape |
-| `--conservar-audio` | No borrar el audio descargado |
+| `--modelo` | `tiny`, `base`, `small` (default), `medium`, `large-v3-turbo`. Larger = more accurate and slower |
+| `--idioma` | Language code (`es`, `en`...). Detected automatically by default |
+| `--vocabulario` | Proper names or technical terms that Whisper tends to get wrong |
+| `--subtitulos` | If the video has human-made subtitles, they are used instead of transcribing (instant). Otherwise it transcribes with Whisper |
+| `--salida` | Output folder (default: `transcripciones` next to the script) |
+| `--referer` | Page where the video is played (fixes many 403 errors on `.m3u8`) |
+| `--cookies-navegador` | Use the cookies of `chrome`, `edge`, `firefox`... |
+| `--cookies` | `cookies.txt` file in Netscape format |
+| `--conservar-audio` | Do not delete the downloaded audio |
+| `--hilos` | Number of CPU threads (default: 4) |
+| `--prioridad-normal` | Do not lower the process priority |
 
-## Vídeos incrustados en otras webs
+## Embedded videos on other websites
 
-Cuando el vídeo está dentro de otra página (un curso, una web con reproductor propio), la forma más fácil es:
+When the video is inside another page (a course, a site with its own player), the easiest way is:
 
-1. Abre las DevTools del navegador (F12) → pestaña **Red** y reproduce el vídeo.
-2. Haz clic derecho en una petición del vídeo → **Copiar** → **Copiar como cURL (cmd)**.
-3. Ejecuta `.\transcribir.cmd` sin argumentos.
+1. Open the browser's DevTools (F12) → **Network** tab and play the video.
+2. Right-click a video request → **Copy** → **Copy as cURL (cmd)**.
+3. Run `.\transcribir.cmd` with no arguments.
 
-La herramienta lee el portapapeles, saca la URL y el Referer del cURL y, si es un vídeo de YouTube incrustado, lo convierte en la URL normal del vídeo. Para streams `.m3u8` busca la petición que acaba en `.m3u8`; si lleva un token que caduca, lánzalo enseguida.
+The tool reads the clipboard, extracts the URL and the Referer from the cURL and, if it is an embedded YouTube video, converts it to the normal video URL. For `.m3u8` streams it looks for the request that ends in `.m3u8`; if it carries a token that expires, run it right away.
 
-Ojo: no vale cualquier petición. Las de estadísticas del reproductor (`ptracking`, `stats`, `.metrics/track-session`...) no siempre llevan el vídeo. En YouTube suelen incluir el id y funcionan; en reproductores Bunny (`mediadelivery.net`) no, y la herramienta te dirá que copies la petición a `iframe.mediadelivery.net/embed/NUMERO/ID` (filtra por `embed` en la pestaña Red) o la que acaba en `playlist.m3u8`.
+Be careful: not every request works. Player statistics requests (`ptracking`, `stats`, `.metrics/track-session`...) do not always contain the video. On YouTube they usually include the id and work; on Bunny players (`mediadelivery.net`) they do not, and the tool will tell you to copy the request to `iframe.mediadelivery.net/embed/NUMBER/ID` (filter by `embed` in the Network tab) or the one that ends in `playlist.m3u8`.
 
-Si el servidor devuelve 401/403, prueba por este orden: `--referer`, `--cookies-navegador` (con el navegador cerrado) y `--cookies`.
+If the server returns 401/403, try in this order: `--referer`, `--cookies-navegador` (with the browser closed) and `--cookies`.
 
-## Rendimiento orientativo
+## Performance
 
-En un portátil con CPU y el modelo `small`, un vídeo de 3 minutos tarda alrededor de 1 minuto en total. Durante la transcripción se muestra la velocidad (`x3.0` = 3 minutos de audio por minuto real) y el tiempo restante estimado.
+On a laptop CPU with the `small` model, a 3-minute video takes about 1 minute in total. During transcription the speed is shown (`x3.0` = 3 minutes of audio per real minute) along with the estimated time remaining.
 
-## Transcripciones largas (horas)
+## Long transcriptions (hours)
 
-- El texto se va guardando párrafo a párrafo. Si se corta (fallo o Ctrl+C), lo transcrito hasta ese momento queda en el `.txt` y el audio descargado se conserva; la herramienta muestra el comando para repetir la transcripción sin volver a descargar (empieza de nuevo desde el principio del audio).
-- Si el vídeo no tiene una pista de solo audio, se descarga la versión de menor resolución: el audio es el mismo y pesa mucho menos.
-- Deja el portátil enchufado y que no entre en suspensión.
+- The text is saved paragraph by paragraph. If it stops (failure or Ctrl+C), what was transcribed up to that point stays in the `.txt`, and the downloaded audio is kept; the tool shows the command to repeat the transcription without downloading again (it starts again from the beginning of the audio).
+- If the video has no audio-only track, the lowest-resolution version is downloaded: the audio is the same and much smaller.
+- Keep the laptop plugged in and prevent it from going to sleep.
 
-## Consumo de CPU y memoria
+## CPU and memory use
 
-- **RAM:** con el modelo `small`, unos 0,75 GB, más unos 230 MB por cada hora de audio. No crece durante la transcripción.
-- **CPU:** usa 4 hilos por defecto y se ejecuta con prioridad baja, así que el ordenador sigue respondiendo con normalidad. Que la CPU vaya al 100 % un buen rato no la daña: si se calienta, ella misma baja la velocidad.
-- Para ir aún más suave: `--hilos 2` (más lento). En un sobremesa con muchos núcleos, `--hilos 8` puede acelerar.
-- `--modelo medium` usa unas 2-3 veces más RAM y tiempo que `small`.
+- **RAM:** with the `small` model, about 0.75 GB, plus about 230 MB per hour of audio. It does not grow during transcription.
+- **CPU:** uses 4 threads by default and runs with low priority, so the computer stays responsive. Keeping the CPU at 100 % for a long time does not damage it: if it heats up, it slows itself down.
+- To go even lighter: `--hilos 2` (slower). On a desktop with many cores, `--hilos 8` may be faster.
+- `--modelo medium` uses about 2–3 times more RAM and time than `small`.
 
-## Seguridad y privacidad
+## Security and privacy
 
-- **Cookies y sesiones:** `--cookies`, `--cookies-navegador` y los `.har` o las peticiones copiadas con «Copiar como cURL» pueden contener sesiones iniciadas. No los subas a ningún sitio ni los pegues en issues. El repositorio ignora `cookies*`, `*.har` y `.env`, pero eso no sustituye a tener cuidado al manejarlos.
-- **Contenido descargado:** el audio, los vídeos y las transcripciones se guardan en `transcripciones/`, que está excluida del control de versiones salvo la salida de referencia del smoke test. Revisa antes de compartir una transcripción si tiene datos personales o contenido con copyright.
-- **Procesamiento local:** la transcripción se hace en tu equipo. Hugging Face solo sirve para descargar los modelos la primera vez.
-- **Vulnerabilidades:** repórtalas en privado según [SECURITY.md](SECURITY.md), nunca como issue público.
+- **Cookies and sessions:** `--cookies`, `--cookies-navegador`, and `.har` files or requests copied with "Copy as cURL" can contain logged-in sessions. Do not upload them anywhere or paste them into issues. The repository ignores `cookies*`, `*.har` and `.env`, but that does not replace being careful with them.
+- **Downloaded content:** audio, videos and transcripts are saved in `transcripciones/`, which is excluded from version control except for the smoke-test reference output. Check a transcript for personal data or copyrighted content before sharing it.
+- **Local processing:** transcription happens on your machine. Hugging Face is only used to download the models the first time.
+- **Vulnerabilities:** report them privately following [SECURITY.md](SECURITY.md), never as a public issue.
 
-## Contribuir
+## Contributing
 
-Consulta [CONTRIBUTING.md](CONTRIBUTING.md) para preparar el entorno, ejecutar el smoke test y abrir un pull request. Todos debemos seguir el [código de conducta](CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) to set up the environment, run the smoke test and open a pull request. Everyone is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Licencia
+## License
 
-Distribuido bajo la [GNU General Public License v3.0](LICENSE) (GPLv3). Puedes usarlo, estudiarlo, modificarlo y redistribuirlo bajo esos términos. Las dependencias usan licencias compatibles (MIT, BSD, Apache-2.0, Unlicense); ffmpeg se instala aparte y no forma parte del repositorio.
+Distributed under the [GNU General Public License v3.0](LICENSE) (GPLv3). You may use, study, modify and redistribute it under those terms. The dependencies use compatible licenses (MIT, BSD, Apache-2.0, Unlicense); ffmpeg is installed separately and is not part of the repository.
 
 Copyright (C) 2026 Diego Izquierdo Fernandez
