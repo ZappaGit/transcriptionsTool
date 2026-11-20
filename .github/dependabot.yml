@@ -7,6 +7,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # av 19 eliminó el argumento metadata_errors que usa faster-whisper 1.2.1: no subir a 19 hasta
+    # que faster-whisper sea compatible.
+    ignore:
+      - dependency-name: "av"
+        versions: [">=19"]
     commit-message:
       prefix: "deps"
 
