@@ -95,4 +95,4 @@ Consulta [CONTRIBUTING.md](CONTRIBUTING.md) para preparar el entorno, ejecutar e
 
 Distribuido bajo la [GNU General Public License v3.0](LICENSE) (GPLv3). Puedes usarlo, estudiarlo, modificarlo y redistribuirlo bajo esos términos. Las dependencias usan licencias compatibles (MIT, BSD, Apache-2.0, Unlicense); ffmpeg se instala aparte y no forma parte del repositorio.
 
-Copyright (C) [YEAR] [HOLDER]
+Copyright (C) 2026 Diego Izquierdo Fernandez
