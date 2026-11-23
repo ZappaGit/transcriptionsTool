@@ -31,10 +31,12 @@ os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 
 def buscar_ffmpeg() -> str | None:
-    """Devuelve la carpeta donde está ffmpeg (PATH o instalación de winget)."""
+    """Devuelve la carpeta donde está ffmpeg (PATH o, en Windows, la instalación de winget)."""
     exe = shutil.which("ffmpeg")
     if exe:
         return str(Path(exe).resolve().parent)
+    if sys.platform != "win32":
+        return None
     local = Path(os.environ.get("LOCALAPPDATA", ""))
     enlace = local / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe"
     if enlace.exists():
@@ -48,11 +50,31 @@ HOSTS_YOUTUBE = ("youtube.com", "youtube-nocookie.com", "youtu.be")
 
 
 def leer_portapapeles() -> str:
-    r = subprocess.run(
-        ["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
-    return r.stdout.strip()
+    """Devuelve el texto del portapapeles, o "" si no se puede leer.
+
+    Windows usa PowerShell. Linux prueba las herramientas habituales de X11 y Wayland;
+    en WSL también sirve el powershell.exe de Windows (último recurso).
+    """
+    if sys.platform == "win32":
+        ordenes = [["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"]]
+    else:
+        ordenes = [
+            ["wl-paste", "--no-newline"],                        # Wayland (wl-clipboard)
+            ["xclip", "-selection", "clipboard", "-o"],          # X11
+            ["xsel", "--clipboard", "--output"],                 # X11
+            ["powershell.exe", "-NoProfile", "-Command", "Get-Clipboard -Raw"],  # WSL
+        ]
+    for orden in ordenes:
+        if not shutil.which(orden[0]):
+            continue
+        try:
+            r = subprocess.run(orden, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=15)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if r.returncode == 0:
+            return r.stdout.strip()
+    return ""
 
 
 def normalizar_entrada(texto: str, args) -> str:
@@ -215,7 +237,8 @@ def descargar_audio(url: str, carpeta: Path, args) -> tuple[Path, str]:
 
     ffmpeg = buscar_ffmpeg()
     if not ffmpeg:
-        sys.exit("No encuentro ffmpeg. Instálalo con: winget install Gyan.FFmpeg")
+        sys.exit("No encuentro ffmpeg. Instálalo con: winget install Gyan.FFmpeg" if sys.platform == "win32"
+                 else "No encuentro ffmpeg. Instálalo con tu gestor de paquetes, p. ej.: sudo apt install ffmpeg")
 
     opciones = opciones_ytdlp(carpeta, args)
     opciones["postprocessors"] += [
@@ -315,6 +338,8 @@ def bajar_prioridad():
         k32 = ctypes.windll.kernel32
         k32.GetCurrentProcess.restype = ctypes.c_void_p
         k32.SetPriorityClass(ctypes.c_void_p(k32.GetCurrentProcess()), BELOW_NORMAL_PRIORITY_CLASS)
+    elif hasattr(os, "nice"):
+        os.nice(5)  # Linux/WSL: prioridad más baja (nice 5); los procesos hijos la heredan
 
 
 def main():

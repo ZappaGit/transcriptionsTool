@@ -24,11 +24,16 @@ transcribir downloads the audio of a video (YouTube, `.m3u8` streams, and [anyth
 
 ## Requirements
 
-- [uv](https://docs.astral.sh/uv/) (installs Python ≥ 3.12 and the dependencies)
-- **ffmpeg**: `winget install Gyan.FFmpeg` (it does not need to be on the PATH; the winget folder is searched too)
-- Recommended: **Deno** (`winget install DenoLand.Deno`), which yt-dlp needs to extract YouTube videos properly
+- [uv](https://docs.astral.sh/uv/) (installs Python 3.12 and the dependencies; the version is pinned in `.python-version`)
+- **ffmpeg**:
+  - Windows: `winget install Gyan.FFmpeg` (it does not need to be on the PATH; the winget folder is searched too)
+  - Linux / WSL: `sudo apt install ffmpeg`
+- Recommended: **Deno** (`winget install DenoLand.Deno` on Windows; see [deno.land](https://deno.land) on Linux), which yt-dlp needs to extract YouTube videos properly
+- Clipboard mode (no URL argument) on Linux needs `wl-clipboard` (Wayland) or `xclip` (X11). Under WSL it uses the Windows clipboard automatically.
 
 ## Installation
+
+Windows (PowerShell):
 
 ```powershell
 git clone https://github.com/ZappaGit/transcriptionsTool.git
@@ -36,9 +41,20 @@ cd transcriptionsTool
 uv sync
 ```
 
+Linux and WSL (bash):
+
+```bash
+git clone https://github.com/ZappaGit/transcriptionsTool.git
+cd transcriptionsTool
+uv sync
+chmod +x transcribir.sh   # only if git did not keep the execute bit
+```
+
 The first time each Whisper model is used, it is downloaded automatically (from tens of MB for `tiny` to more than 1 GB for the large ones).
 
 ## Usage
+
+Windows:
 
 ```powershell
 .\transcribir.cmd URL                                   # works from any folder
@@ -49,7 +65,15 @@ The first time each Whisper model is used, it is downloaded automatically (from 
 .\transcribir.cmd                                       # no URL: reads it from the clipboard
 ```
 
-You can also run it with `uv run python transcribir.py ...`.
+Linux and WSL: the same options with the wrapper `./transcribir.sh`, and paths in Linux format:
+
+```bash
+./transcribir.sh URL
+./transcribir.sh URL --modelo medium --idioma es
+./transcribir.sh /ruta/audio.mp3
+```
+
+You can also run it with `uv run python transcribir.py ...` on any platform.
 
 The result is saved as `transcripciones\<title> - <id>.txt`. The downloaded audio is deleted when it finishes (unless you use `--conservar-audio`).
 

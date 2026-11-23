@@ -4,9 +4,20 @@ Thanks for your interest. Before you start, please read the [Code of Conduct](CO
 
 ## Setting up the environment
 
-Requirements: Windows, [uv](https://docs.astral.sh/uv/) and ffmpeg (`winget install Gyan.FFmpeg`).
+Requirements: [uv](https://docs.astral.sh/uv/) and ffmpeg. On Windows: `winget install Gyan.FFmpeg`. On Linux or WSL: `sudo apt install ffmpeg`.
+
+Windows (PowerShell):
 
 ```powershell
+git clone https://github.com/ZappaGit/transcriptionsTool.git
+cd transcriptionsTool
+uv sync
+uv run python transcribir.py --help
+```
+
+Linux and WSL (bash):
+
+```bash
 git clone https://github.com/ZappaGit/transcriptionsTool.git
 cd transcriptionsTool
 uv sync
@@ -19,6 +30,12 @@ The project has no unit tests. The reference check is the smoke test: a short 19
 
 ```powershell
 uv run python transcribir.py "https://www.youtube.com/watch?v=jNQXAC9IVRw" --salida $env:TEMP\humo
+```
+
+On Linux or WSL:
+
+```bash
+uv run python transcribir.py "https://www.youtube.com/watch?v=jNQXAC9IVRw" --salida /tmp/humo
 ```
 
 Compare the resulting `.txt` with `transcripciones/Me at the zoo - jNQXAC9IVRw.txt`.
